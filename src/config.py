@@ -16,3 +16,10 @@ class DevelopmentConfig(Config):
     DEVELOPMENT=True
     DEBUG=True
     MONGO_URI="mongodb://admin:adm1n!@localhost:27018/prueba"
+
+class TestConfig(Config):
+    ENV="test"
+    TESTING=True
+    DEVELOPMENT=False
+    DEBUG=False
+    MONGO_URI="mongodb://localhost:27018/test"
