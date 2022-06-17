@@ -1,10 +1,14 @@
-############################ CREDENCIALES ############################
-USER = "admin"
-API_TOKEN = "118258f7cd58beb80d653fb121ae6fe162"
-IP_PORT = "localhost:8080"
-JOB = "prueba"
+import requests
+import numpy as np
+import json
+from bson import json_util
+from datetime import datetime
+from flask import Response
+from .db_methods import *
 
-BASE_URL = "http://" + USER + ":" + API_TOKEN + "@" + IP_PORT + "/job/" + JOB
+###################################
+########## REGISTERS ##############
+###################################
 
 ############################ ACTIVIDADES ############################
 TEST = ["mvn test", "gradle test"]
@@ -24,16 +28,7 @@ DIC = {
 
 #####################################################################
 
-import requests
-import numpy as np
-import json
-from bson.objectid import ObjectId
-from bson import json_util
-from datetime import datetime, timedelta
-from flask import jsonify, Response
-import pandas as pd
-from .db_methods import *
-
+# Se obtiene la infomacion de una construccion del pipeline
 def get_lines(buildNumber, source_id):
     ip_port, job, user, token = get_source_info(source_id)
 
@@ -45,7 +40,6 @@ def get_lines(buildNumber, source_id):
     info_url = base_url + "/" + str(buildNumber) + "/api/json"
     info_res = requests.get(info_url)
     info = json.loads(info_res.text)
-    print(info_url)
     status = info['result']
     timestamp = (info['timestamp'] // 1000)
     try:
@@ -54,6 +48,8 @@ def get_lines(buildNumber, source_id):
         userName = info['actions'][0]['causes'][0]['shortDescription'].split(' ')[-1]
     return res_arr, status, userName, timestamp
 
+# Se obtiene una lista de los identificadores de las ejecuciones del pipeline que se deben revisar
+# (numero de ejecucion)
 def get_build_numbers(team_project_id, source_id):
     ip_port, job, user, token = get_source_info(source_id)
 
@@ -67,9 +63,10 @@ def get_build_numbers(team_project_id, source_id):
     else: 
         last_in_bd += 1 # Porque comienza con el siguiente
     build_numbers = range(last_in_bd, int(lastBuildNumber.text) + 1)
-    #print(build_numbers)
     return build_numbers
 
+# Se analiza una linea de la salida console output de una ejecucion del pipeline
+# buscando si existen coincidencias con los comandos definidos arriba para cada actividad
 def analize_one_line(line):
     # Se analiza el contenido de una linea y se entrega la actividad y el timestamp
     if any(word in line for word in TEST):
@@ -84,6 +81,10 @@ def analize_one_line(line):
         return DIC["DEPLOY"], line.split(" ")[0]
     return None, None
 
+# Se analizan las lineas de la salida console output de una ejecucion del pipeline
+# y se agregan registros para process mining si se encuentran coincidencias en los comandos de 
+# las actividades
+# (el despliegue se registra solo si es exitoso)
 def analize_lines(team_id, team_project_id, lines, status, userName, timestamp, buildNumber):
     i = 0
     case_id = get_actual_case_id(team_project_id)
@@ -102,14 +103,13 @@ def analize_lines(team_id, team_project_id, lines, status, userName, timestamp, 
                 if act == DIC["DEPLOY"] and status == "SUCCESS":
                     save_register(team_project_id, case_id, act, time, userName, buildNumber)
                     # Actualizar case_id y cambiar case_id de los registros con timestamp posterior
-                    print("DESPLIEGUE EXITOSO")
                     case_id = update_case_id(team_id, team_project_id, time)
         i += 1
 
+# Todo el proceso que obtiene los registros para process mining
 def get_jenkins_data(team_id, team_project_id, source_id):
     # Se obtienen los build numbers de los console output que no han sido analizados
     build_numbers = get_build_numbers(team_project_id, source_id)
-    #print(build_numbers)
     # Por cada build number se generan registros
     for number in build_numbers:
         # Se generan registros (analisis y guardar en bd)
@@ -119,9 +119,11 @@ def get_jenkins_data(team_id, team_project_id, source_id):
         update_last_build_number(team_project_id, number, source_id)
 
 ###################################
-########## PARTICIPACION ##########
+########## PARTICIPATION ##########
 ###################################
 
+# Se obtiene la informacion del pipeline de Jenkins asociado a un proyecto y segun su id
+# y se actualiza en la bd el numero total de construcciones hasta el momento
 def get_jenkins_info(team_project_id, source_id):
     ip_port, job, user, token = get_source_info(source_id)
     
@@ -132,6 +134,9 @@ def get_jenkins_info(team_project_id, source_id):
     
     update_total_build(team_project_id, source_id, total_build)
 
+# Se obtiene la informacion de cada ejecucion del pipeline 
+# (para identificar como participaron en las ejecuciones los desarrolladores)
+# (auto) = se ha iniciado el pipeline automaticamente mediante el webhook de GitHub
 def get_jenkins_job_info(team_project_id, source_id):
     ip_port, job, user, token = get_source_info(source_id)
     
@@ -145,7 +150,6 @@ def get_jenkins_job_info(team_project_id, source_id):
         info_url = base_url + "/" + str(number) + "/api/json"
         info_res = requests.get(info_url)
         info = json.loads(info_res.text)
-        print(info)
         status = info['result']
         try:
             userName = info['actions'][0]['causes'][0]['userName']
@@ -155,12 +159,16 @@ def get_jenkins_job_info(team_project_id, source_id):
         insert_jenkins_job_info(team_project_id, job, number, userName, status, source_id, timestamp)
         update_last_build_part(team_project_id, source_id, number)
 
+# Se calcula la participacion en Jenkins segun la informacion registrada de cada ejecucion del pipeline
+# (arriba)
 def calculate_jenkins_participation(team_project_id, source_id):
     calculate_jenkins_participation_db(team_project_id, source_id)
 
+# Se calculan los porcentajes de participacion por desarrollador
 def calculate_percentages(team_project_id, source_id):
     calculate_percentages_db(team_project_id, source_id)
 
+# Se obtine la participacion de los desarrolladores junto con el total de construcciones del pipeline
 def get_team_participation(team_project_id, source_id):
     developers = get_team_participation_db(team_project_id, source_id)
     total_builds = get_total_builds(team_project_id, source_id)
@@ -172,6 +180,7 @@ def get_team_participation(team_project_id, source_id):
     response = json_util.dumps(participation)
     return Response(response, mimetype='application/json')
 
+# Se obtiene la informacion de los stages (nombres y cantidad) de cada ejecucion del pipeline
 def get_stages_info(team_project_id, source_id):
     ip_port, job, user, token = get_source_info(source_id)
     base_url = "http://" + user + ":" + token + "@" + ip_port + "/job/" + job
@@ -182,7 +191,6 @@ def get_stages_info(team_project_id, source_id):
         info_url = base_url + "/" + str(number) + "/wfapi/describe"
         info_res = requests.get(info_url)
         info = json.loads(info_res.text)
-        print(info)
         stages_inner = []
         stages = info['stages']
         for stage in stages:
