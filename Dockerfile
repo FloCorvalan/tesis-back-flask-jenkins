@@ -11,8 +11,6 @@ RUN conda env create -f environment.yml
 RUN echo "source activate myenv" > ~/.bashrc
 ENV PATH /opt/conda/envs/myenv/bin:$PATH
 
-RUN conda install -c conda-forge python-graphviz -y
-
 ENTRYPOINT [ "python3" ]
 
 CMD [ "app.py" ]
