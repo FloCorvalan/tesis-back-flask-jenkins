@@ -1,17 +1,15 @@
-FROM ubuntu:20.04
-
-RUN apt-get update -y && \
-    apt-get install -y python3-pip python3-dev
-
-COPY ./requirements.txt /app/requirements.txt
+FROM continuumio/miniconda:latest
 
 WORKDIR /app
 
-RUN pip3 install -r requirements.txt
-
+COPY environment.yml ./
 COPY /src /app
-
 COPY .env /app
+
+RUN conda env create -f environment.yml
+
+RUN echo "source activate myenv" > ~/.bashrc
+ENV PATH /opt/conda/envs/myenv/bin:$PATH
 
 ENTRYPOINT [ "python3" ]
 
