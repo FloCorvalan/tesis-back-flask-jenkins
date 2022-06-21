@@ -1,15 +1,17 @@
-FROM continuumio/miniconda:latest
+FROM ubuntu:20.04
+
+RUN apt-get update -y && \
+    apt-get install -y python3-pip python3-dev
+
+# We copy just the requirements.txt first to leverage Docker cache
+COPY ./requirements.txt /app/requirements.txt
 
 WORKDIR /app
 
-COPY environment.yml ./
+RUN pip3 install -r requirements.txt
+
 COPY /src /app
 COPY .env /app
-
-RUN conda env create -f environment.yml
-
-RUN echo "source activate myenv" > ~/.bashrc
-ENV PATH /opt/conda/envs/myenv/bin:$PATH
 
 ENTRYPOINT [ "python3" ]
 
