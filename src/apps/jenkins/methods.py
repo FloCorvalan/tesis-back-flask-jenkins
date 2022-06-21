@@ -34,7 +34,7 @@ def get_lines(buildNumber, source_id):
 
     base_url = "http://" + user + ":" + token + "@" + ip_port + "/job/" + job
 
-    console_output_url = base_url + "/" + str(buildNumber) + "/timestamps/?time=yyyy-MM-dd%HH:mm:ss&appendLog"
+    console_output_url = base_url + "/" + str(buildNumber) + "/timestamps/?time=yyyy-MM-dd-HH:mm:ss&appendLog"
     res = requests.get(console_output_url)
     res_arr = np.array(res.text.split("\n"))
     info_url = base_url + "/" + str(buildNumber) + "/api/json"
@@ -96,7 +96,7 @@ def analize_lines(team_id, team_project_id, lines, status, userName, timestamp, 
             act, time = analize_one_line(lines[i+1])
             if act != None:
                 if time != '':
-                    time = datetime.strptime(time, "%Y-%m-%d%%%H:%M:%S").timestamp()
+                    time = datetime.strptime(time, "%Y-%m-%d-%H:%M:%S").timestamp()
                 # Guardar registro en bd
                 if act != DIC["DEPLOY"]:
                     save_register(team_project_id, case_id, act, time, userName, buildNumber)
