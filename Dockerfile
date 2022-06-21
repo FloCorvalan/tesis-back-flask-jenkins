@@ -9,6 +9,9 @@ COPY ./requirements.txt /app/requirements.txt
 WORKDIR /app
 
 RUN pip3 install -r requirements.txt
+RUN DEBIAN_FRONTEND=noninteractive TZ=America/Santiago apt-get -y install tzdata
+ENV TZ=America/Santiago
+RUN ln -fs /usr/share/zoneinfo/$TZ /etc/localtime && dpkg-reconfigure -f noninteractive tzdata
 
 COPY /src /app
 COPY .env /app
